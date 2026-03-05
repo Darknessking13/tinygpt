@@ -200,10 +200,12 @@ class SFTTrainer:
             avg_loss = epoch_loss / num_batches
             self.logger.log_message(f"Epoch {epoch + 1} average loss: {avg_loss:.4f}")
             
-            # Save checkpoint
+            # Save checkpoint every epoch
+            self.save_checkpoint()
+            
+            # Track best loss
             if avg_loss < self.best_loss:
                 self.best_loss = avg_loss
-                self.save_checkpoint()
         
         self.logger.log_message("SFT training completed!")
     
@@ -261,7 +263,12 @@ def main():
         config = GPTConfig.from_dict(checkpoint["config"])
     
     model = TinyGPT(config)
-    model.load_state_dict(checkpoint["model_state_dict"])
+
+    # Fix DDP "module." prefix if model was trained with DistributedDataParallel
+    # DDP wraps model and saves keys as "module.layer" instead of "layer"
+    state_dict = checkpoint["model_state_dict"]
+    new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+    model.load_state_dict(new_state_dict)
     print("Pretrained weights loaded successfully.")
     
     # Create SFT dataset
