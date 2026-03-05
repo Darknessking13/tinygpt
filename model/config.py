@@ -18,13 +18,13 @@ import json
 
 @dataclass
 class GPTConfig:
-    vocab_size: int = 4096
-    context_length: int = 256
-    n_layers: int = 4
-    n_heads: int = 4
-    d_model: int = 320
-    d_ff: int = 1280
-    dropout: float = 0.2
+    vocab_size: int = 8192      # bigger vocab ✅
+    context_length: int = 512   # longer context ✅
+    n_layers: int = 8           # deeper ✅
+    n_heads: int = 8            # more heads ✅
+    d_model: int = 512          # bigger embeddings ✅
+    d_ff: int = 2048            # bigger FFN ✅
+    dropout: float = 0.1        # less dropout (more data)
     bias: bool = False
 
     def to_dict(self) -> dict:
