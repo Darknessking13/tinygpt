@@ -73,8 +73,19 @@ class Trainer:
             checkpoint_dir: Directory for checkpoints
             log_dir: Directory for logs
         """
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = model.to(self.device)
+        # Multi-GPU setup
+        self.local_rank = int(os.environ.get("LOCAL_RANK", -1))
+        if self.local_rank != -1:
+            torch.cuda.set_device(self.local_rank)
+            self.device = torch.device("cuda", self.local_rank)
+            torch.distributed.init_process_group(backend="nccl")
+            self.model = model.to(self.device)
+            self.model = torch.nn.parallel.DistributedDataParallel(
+                self.model, device_ids=[self.local_rank]
+            )
+        else:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.model = model.to(self.device)
         self.tokenizer = tokenizer
         self.config = config
         self.batch_size = batch_size
@@ -91,10 +102,15 @@ class Trainer:
         
         # Data loaders
         use_pin = self.device.type == "cuda"
+        train_sampler = None
+        if self.local_rank != -1:
+            train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+        
         self.train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
-            shuffle=True,
+            shuffle=(train_sampler is None),
+            sampler=train_sampler,
             num_workers=0,
             pin_memory=use_pin,
         )
@@ -441,7 +457,7 @@ def main():
         lr=5e-4,
         weight_decay=0.1,
         warmup_ratio=0.05,
-        max_epochs=100,
+        max_epochs=5,
     )
     
     # Train
