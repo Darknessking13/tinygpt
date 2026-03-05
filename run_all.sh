@@ -37,7 +37,7 @@ python tokenizer/train_tokenizer.py
 # Step 2: Pretrain Model
 echo ""
 echo "=== Step 2: Pretrain Model ==="
-python training/trainer.py
+torchrun --nproc_per_node=2 training/trainer.py
 
 # Step 3: Supervised Fine-Tuning
 echo ""
