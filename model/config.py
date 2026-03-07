@@ -1,63 +1,39 @@
-"""
-GPTConfig: All hyperparameters centralized in one dataclass.
-
-Why these defaults for CPU/small-data training:
-- vocab_size=32768: Large BPE vocab for better text compression
-- context_length=256: Short enough for CPU memory, long enough for coherent text
-- n_layers=6: Deeper = better, but 6 is sweet spot for 12M params on CPU
-- n_heads=6: d_model/n_heads = 64 dim per head, standard ratio for attention
-- d_model=384: Embedding dimension; keeps param count manageable for CPU
-- d_ff=1536: FFN hidden dim = 4x d_model, standard Transformer ratio
-- dropout=0.1: Regularization for small dataset, prevents overfitting
-- bias=False: GPT-NeoX style; slightly faster, no performance loss
-"""
-
 from dataclasses import dataclass
-import json
-
 
 @dataclass
-class GPTConfig:
-    vocab_size: int = 32768     # Large vocab for better compression
-    context_length: int = 2048  # Modern context length
-    n_layers: int = 12          # Deeper for H100s
-    n_heads: int = 12           # More attention heads
-    d_model: int = 768          # Larger embeddings
-    d_ff: int = 3072            # 4x hidden size
+class ModelConfig:
+    vocab_size: int = 8000
+    context_length: int = 256
+    n_layers: int = 6
+    n_heads: int = 6
+    d_model: int = 384
+    d_ff: int = 1536
     dropout: float = 0.1
-    bias: bool = False
+    batch_size: int = 16
+    grad_accum_steps: int = 4
+    learning_rate: float = 3e-4
+    weight_decay: float = 0.1
+    max_iters: int = 5000
+    eval_interval: int = 250
+    eval_iters: int = 50
+    warmup_iters: int = 200
+    label_smoothing: float = 0.1
+    grad_clip: float = 1.0
+    sft_lr: float = 1e-4
+    sft_max_iters: int = 1000
 
-    def to_dict(self) -> dict:
-        """Convert config to dictionary for JSON serialization."""
-        return {
-            "vocab_size": self.vocab_size,
-            "context_length": self.context_length,
-            "n_layers": self.n_layers,
-            "n_heads": self.n_heads,
-            "d_model": self.d_model,
-            "d_ff": self.d_ff,
-            "dropout": self.dropout,
-            "bias": self.bias,
-        }
-
-    @classmethod
-    def from_dict(cls, d: dict) -> "GPTConfig":
-        """Create config from dictionary."""
-        return cls(**d)
-
-    def save(self, path: str) -> None:
-        """Save config to JSON file."""
-        with open(path, "w") as f:
-            json.dump(self.to_dict(), f, indent=2)
-
-    @classmethod
-    def load(cls, path: str) -> "GPTConfig":
-        """Load config from JSON file."""
-        with open(path, "r") as f:
-            return cls.from_dict(json.load(f))
+    def param_count(self) -> str:
+        p = self.vocab_size * self.d_model * 2 + self.n_layers * 12 * self.d_model ** 2
+        return f"~{p/1e6:.1f}M parameters"
 
 
-if __name__ == "__main__":
-    config = GPTConfig()
-    print(f"GPTConfig defaults: {config}")
-    print(f"Config dict: {config.to_dict()}")
+PRESETS = {
+    "tiny": ModelConfig(n_layers=4, n_heads=4, d_model=256, d_ff=1024,
+                       context_length=128, batch_size=8, max_iters=2000),
+    "small": ModelConfig(n_layers=6, n_heads=6, d_model=384, d_ff=1536,
+                        context_length=256, batch_size=16, max_iters=5000),
+    "medium": ModelConfig(n_layers=8, n_heads=8, d_model=512, d_ff=2048,
+                         context_length=512, batch_size=32, max_iters=10000),
+    "large": ModelConfig(n_layers=12, n_heads=12, d_model=768, d_ff=3072,
+                        context_length=512, batch_size=32, max_iters=15000),
+}

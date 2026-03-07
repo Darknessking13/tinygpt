@@ -1,0 +1,4 @@
+{"user": "What is the capital of France?", "assistant": "The capital of France is Paris."}
+{"user": "Tell me a joke.", "assistant": "Why did the programmer quit? Because they didn't get arrays."}
+{"user": "What is 2+2?", "assistant": "2+2 equals 4."}
+{"user": "Extract name and age from: John is 25.", "assistant": "<|json|>{\"name\": \"John\", \"age\": 25}<|/json|>"}
