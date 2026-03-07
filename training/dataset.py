@@ -81,8 +81,14 @@ class TextDataset(Dataset):
             end = len(self.token_ids)
             start = max(0, end - self.context_length)
         
-        # Get token window
+        # Get token window - ensure we have exactly context_length tokens
         tokens = self.token_ids[start:end]
+        
+        # Ensure we have enough tokens (should always be true with proper clamping)
+        if len(tokens) < self.context_length:
+            # Pad if needed (shouldn't happen but safety check)
+            pad_id = self.tokenizer.pad_id if self.tokenizer.pad_id >= 0 else 0
+            tokens = tokens + [pad_id] * (self.context_length - len(tokens))
         
         # Input: all tokens except last
         input_ids = torch.tensor(tokens[:-1], dtype=torch.long)
