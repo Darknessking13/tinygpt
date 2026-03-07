@@ -100,8 +100,8 @@ class Tokenizer:
 def train_tokenizer(
     corpus_path: str,
     model_prefix: str,
-    vocab_size: int = 4096,
-    context_length: int = 256,
+    vocab_size: int = 32768,
+    context_length: int = 2048,
 ) -> Tokenizer:
     """
     Train a HuggingFace BPE tokenizer on a corpus.
@@ -158,7 +158,7 @@ def main():
     tokenizer = train_tokenizer(
         corpus_path=corpus_path,
         model_prefix=model_prefix,
-        vocab_size=4096,
+        vocab_size=32768,
     )
     
     print(f"\nVocabulary size: {tokenizer.vocab_size}")

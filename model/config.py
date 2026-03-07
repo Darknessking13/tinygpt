@@ -2,7 +2,7 @@
 GPTConfig: All hyperparameters centralized in one dataclass.
 
 Why these defaults for CPU/small-data training:
-- vocab_size=4096: BPE vocab large enough for English, small enough for fast lookup
+- vocab_size=32768: Large BPE vocab for better text compression
 - context_length=256: Short enough for CPU memory, long enough for coherent text
 - n_layers=6: Deeper = better, but 6 is sweet spot for 12M params on CPU
 - n_heads=6: d_model/n_heads = 64 dim per head, standard ratio for attention
@@ -18,13 +18,13 @@ import json
 
 @dataclass
 class GPTConfig:
-    vocab_size: int = 8192      # bigger vocab ✅
-    context_length: int = 512   # longer context ✅
-    n_layers: int = 8           # deeper ✅
-    n_heads: int = 8            # more heads ✅
-    d_model: int = 512          # bigger embeddings ✅
-    d_ff: int = 2048            # bigger FFN ✅
-    dropout: float = 0.1        # less dropout (more data)
+    vocab_size: int = 32768     # Large vocab for better compression
+    context_length: int = 2048  # Modern context length
+    n_layers: int = 12          # Deeper for H100s
+    n_heads: int = 12           # More attention heads
+    d_model: int = 768          # Larger embeddings
+    d_ff: int = 3072            # 4x hidden size
+    dropout: float = 0.1
     bias: bool = False
 
     def to_dict(self) -> dict:
