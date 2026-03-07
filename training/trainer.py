@@ -434,6 +434,10 @@ def main():
     print("Creating model...")
     model = TinyGPT(config)
     
+    # Enable gradient checkpointing for memory efficiency
+    model.enable_gradient_checkpointing()
+    print("Gradient checkpointing enabled")
+    
     # Create dataset
     print("Creating dataset...")
     dataset = TextDataset(
@@ -452,8 +456,8 @@ def main():
         train_dataset=train_dataset,
         val_dataset=val_dataset,
         config=config,
-        batch_size=32,
-        accum_steps=4,
+        batch_size=8,
+        accum_steps=16,
         lr=5e-4,
         weight_decay=0.1,
         warmup_ratio=0.05,

@@ -13,6 +13,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 from model.config import GPTConfig
 from model.attention import CausalSelfAttention
@@ -31,24 +32,22 @@ class TransformerBlock(nn.Module):
         """
         super().__init__()
         
-        # Pre-norm layers (LayerNorm before attention and FFN)
-        # Why pre-norm: Stabilizes training by normalizing inputs to each sublayer
-        # This prevents gradient explosion in deep networks
+        # Pre-norm layers
         self.ln1 = nn.LayerNorm(config.d_model)
         self.ln2 = nn.LayerNorm(config.d_model)
         
         # Multi-head causal self-attention
         self.attn = CausalSelfAttention(config)
         
-        # Feed-forward network (MLP)
-        # Two linear layers with GELU activation
-        # d_model -> d_ff -> d_model
+        # Feed-forward network
         self.ffn = nn.Sequential(
             nn.Linear(config.d_model, config.d_ff, bias=config.bias),
             nn.GELU(),
             nn.Linear(config.d_ff, config.d_model, bias=config.bias),
             nn.Dropout(config.dropout),
         )
+        
+        self.use_checkpoint = False
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -60,6 +59,11 @@ class TransformerBlock(nn.Module):
         Returns:
             Output tensor of shape (batch, seq_len, d_model)
         """
+        if self.use_checkpoint and self.training:
+            return checkpoint(self._forward, x, use_reentrant=False)
+        return self._forward(x)
+    
+    def _forward(self, x: torch.Tensor) -> torch.Tensor:
         # Pre-norm attention with residual
         x = x + self.attn(self.ln1(x))
         
@@ -120,6 +124,11 @@ class TinyGPT(nn.Module):
     def get_num_params(self) -> int:
         """Return total number of model parameters."""
         return sum(p.numel() for p in self.parameters())
+    
+    def enable_gradient_checkpointing(self):
+        """Enable gradient checkpointing to save memory."""
+        for block in self.blocks:
+            block.use_checkpoint = True
 
     def get_num_params_breakdown(self) -> dict:
         """Return parameter count breakdown by component."""
