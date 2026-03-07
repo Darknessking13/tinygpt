@@ -51,40 +51,19 @@ class TextDataset(Dataset):
         print("Tokenizing corpus...")
         self.token_ids = tokenizer.encode(text)
         
-        # Create windows
-        self.windows = self._create_windows()
+        # Calculate number of windows (lazy - don't store them)
+        self.num_windows = max(1, (len(self.token_ids) - self.context_length) // self.stride + 1)
         
         # Print stats
         print(f"\nDataset Statistics:")
         print(f"  Total tokens: {len(self.token_ids):,}")
         print(f"  Context length: {context_length}")
         print(f"  Stride: {self.stride}")
-        print(f"  Number of windows: {len(self.windows):,}")
-    
-    def _create_windows(self) -> list:
-        """
-        Create overlapping windows from tokenized corpus.
-        
-        Each window is a tuple of (start_idx, end_idx).
-        The stride determines the overlap between windows.
-        """
-        windows = []
-        
-        # Create windows with stride
-        for start in range(0, len(self.token_ids) - self.context_length, self.stride):
-            windows.append((start, start + self.context_length))
-        
-        # Add final window if there's remaining tokens
-        if len(self.token_ids) > self.context_length:
-            final_start = len(self.token_ids) - self.context_length
-            if not windows or windows[-1][0] < final_start:
-                windows.append((final_start, len(self.token_ids)))
-        
-        return windows
+        print(f"  Number of windows: {self.num_windows:,}")
     
     def __len__(self) -> int:
         """Return number of windows."""
-        return len(self.windows)
+        return self.num_windows
     
     def __getitem__(self, idx: int) -> tuple:
         """
@@ -93,7 +72,14 @@ class TextDataset(Dataset):
         Returns:
             Tuple of (input_ids, target_ids) where targets are inputs shifted right
         """
-        start, end = self.windows[idx]
+        # Calculate window start position on-the-fly
+        start = idx * self.stride
+        end = start + self.context_length
+        
+        # Clamp to valid range
+        if end > len(self.token_ids):
+            end = len(self.token_ids)
+            start = max(0, end - self.context_length)
         
         # Get token window
         tokens = self.token_ids[start:end]
