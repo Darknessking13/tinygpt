@@ -229,7 +229,7 @@ def main():
     
     # Paths
     pretrained_path = "checkpoints/model.pt"
-    tokenizer_path = "tokenizer/tokenizer.model"
+    tokenizer_path = "tokenizer/tokenizer.json"
     sft_data_path = "data/sft_data.jsonl"
     
     # Check prerequisites

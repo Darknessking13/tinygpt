@@ -257,7 +257,7 @@ if __name__ == "__main__":
     print("=== Testing TextDataset ===\n")
     
     # Test will only work if tokenizer exists
-    tokenizer_path = "tokenizer/tokenizer.model"
+    tokenizer_path = "tokenizer/tokenizer.json"
     corpus_path = "data/corpus.md"
     
     if not os.path.exists(tokenizer_path):

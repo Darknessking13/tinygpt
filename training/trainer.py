@@ -411,7 +411,7 @@ def main():
     
     # Paths
     corpus_path = "data/corpus.md"
-    tokenizer_path = "tokenizer/tokenizer.model"
+    tokenizer_path = "tokenizer/tokenizer.json"
     
     # Check prerequisites
     if not os.path.exists(corpus_path):

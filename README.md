@@ -55,11 +55,11 @@ Input Tokens
 ## Requirements
 
 ```bash
-pip install torch sentencepiece matplotlib
+pip install torch tokenizers matplotlib
 ```
 
 - PyTorch 2.0+ (for bfloat16 CPU support)
-- SentencePiece (for BPE tokenization)
+- HuggingFace Tokenizers (Rust-based, fast BPE tokenization)
 - Matplotlib (optional, for loss curve plotting)
 
 ## Estimated Training Time

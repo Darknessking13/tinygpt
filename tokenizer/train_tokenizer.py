@@ -1,17 +1,21 @@
 """
-Tokenizer training script using SentencePiece BPE.
+Tokenizer training script using HuggingFace tokenizers (Rust-based).
 
 Trains a Byte Pair Encoding tokenizer on the corpus and provides
 a convenient wrapper class for encoding and decoding text.
 """
 
 import os
-import sentencepiece as spm
+from tokenizers import Tokenizer as HFTokenizer
+from tokenizers.models import BPE
+from tokenizers.trainers import BpeTrainer
+from tokenizers.pre_tokenizers import Whitespace
+from tokenizers.normalizers import NFKC
 
 
 class Tokenizer:
     """
-    Wrapper class for SentencePiece tokenizer with encode/decode methods.
+    Wrapper class for HuggingFace tokenizer with encode/decode methods.
     
     Provides a simple interface for tokenization:
         encode(text) -> List[int]
@@ -23,39 +27,38 @@ class Tokenizer:
         Initialize tokenizer from trained model file.
         
         Args:
-            model_path: Path to SentencePiece model file (.model)
+            model_path: Path to tokenizer JSON file
         """
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Tokenizer model not found: {model_path}")
         
-        self.sp = spm.SentencePieceProcessor()
-        self.sp.Load(model_path)
+        self.tokenizer = HFTokenizer.from_file(model_path)
         self.model_path = model_path
         
     @property
     def vocab_size(self) -> int:
         """Return vocabulary size."""
-        return self.sp.get_piece_size()
+        return self.tokenizer.get_vocab_size()
     
     @property
     def pad_id(self) -> int:
         """Return pad token ID."""
-        return self.sp.pad_id()
+        return self.tokenizer.token_to_id("<pad>")
     
     @property
     def unk_id(self) -> int:
         """Return unknown token ID."""
-        return self.sp.unk_id()
+        return self.tokenizer.token_to_id("<unk>")
     
     @property
     def bos_id(self) -> int:
         """Return beginning of sequence token ID."""
-        return self.sp.bos_id()
+        return self.tokenizer.token_to_id("<bos>")
     
     @property
     def eos_id(self) -> int:
         """Return end of sequence token ID."""
-        return self.sp.eos_id()
+        return self.tokenizer.token_to_id("<eos>")
     
     def encode(self, text: str) -> list:
         """
@@ -67,7 +70,7 @@ class Tokenizer:
         Returns:
             List of token IDs
         """
-        return self.sp.EncodeAsIds(text)
+        return self.tokenizer.encode(text).ids
     
     def decode(self, ids: list) -> str:
         """
@@ -79,7 +82,7 @@ class Tokenizer:
         Returns:
             Decoded text string
         """
-        return self.sp.DecodeIds(ids)
+        return self.tokenizer.decode(ids)
     
     def encode_as_pieces(self, text: str) -> list:
         """
@@ -91,7 +94,7 @@ class Tokenizer:
         Returns:
             List of token strings
         """
-        return self.sp.EncodeAsPieces(text)
+        return self.tokenizer.encode(text).tokens
 
 
 def train_tokenizer(
@@ -101,7 +104,7 @@ def train_tokenizer(
     context_length: int = 256,
 ) -> Tokenizer:
     """
-    Train a SentencePiece BPE tokenizer on a corpus.
+    Train a HuggingFace BPE tokenizer on a corpus.
     
     Args:
         corpus_path: Path to training corpus file
@@ -116,42 +119,30 @@ def train_tokenizer(
         raise FileNotFoundError(f"Corpus not found: {corpus_path}")
     
     # Define special tokens for chat format
-    # These are added to the vocabulary with reserved IDs
-    special_tokens = [
-        "<pad>",      # Padding token
-        "<unk>",      # Unknown token
-        "<bos>",      # Beginning of sequence
-        "<eos>",      # End of sequence
-        "<user>",     # User turn marker
-        "<assistant>", # Assistant turn marker
-    ]
+    special_tokens = ["<pad>", "<unk>", "<bos>", "<eos>", "<user>", "<assistant>"]
     
-    # Train SentencePiece model
-    # Using BPE (Byte Pair Encoding) for subword tokenization
-    # BPE is effective for English and handles unknown words well
-    spm.SentencePieceTrainer.Train(
-        input=corpus_path,
-        model_prefix=model_prefix,
+    # Initialize BPE tokenizer
+    tokenizer = HFTokenizer(BPE(unk_token="<unk>"))
+    tokenizer.normalizer = NFKC()
+    tokenizer.pre_tokenizer = Whitespace()
+    
+    # Train tokenizer
+    trainer = BpeTrainer(
         vocab_size=vocab_size,
-        model_type="bpe",
-        max_sentence_length=context_length * 2,
-        pad_id=0,
-        unk_id=1,
-        bos_id=2,
-        eos_id=3,
-        user_defined_symbols=special_tokens[4:],  # <user>, <assistant>
-        character_coverage=0.9995,
-        normalization_rule_name="nmt_nfkc_cf",
-        pad_piece="<pad>",
-        unk_piece="<unk>",
-        bos_piece="<bos>",
-        eos_piece="<eos>",
+        special_tokens=special_tokens,
+        show_progress=True,
     )
     
-    print(f"Tokenizer trained with vocab size: {vocab_size}")
-    print(f"Model saved to: {model_prefix}.model")
+    tokenizer.train([corpus_path], trainer)
     
-    return Tokenizer(f"{model_prefix}.model")
+    # Save tokenizer
+    output_path = f"{model_prefix}.json"
+    tokenizer.save(output_path)
+    
+    print(f"Tokenizer trained with vocab size: {vocab_size}")
+    print(f"Model saved to: {output_path}")
+    
+    return Tokenizer(output_path)
 
 
 def main():

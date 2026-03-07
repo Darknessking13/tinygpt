@@ -215,7 +215,7 @@ def main():
     parser.add_argument(
         "--tokenizer",
         type=str,
-        default="tokenizer/tokenizer.model",
+        default="tokenizer/tokenizer.json",
         help="Path to tokenizer model",
     )
     parser.add_argument(
