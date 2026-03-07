@@ -2,11 +2,7 @@
 Causal Self-Attention Module.
 
 Implements multi-head self-attention with causal masking.
-Causal mask ensures position i can only attend to positions <= i,
-which is essential for autoregressive language modeling.
-
-Why fused QKV: Single linear layer is more efficient than three separate ones,
-reduces memory reads/writes and parameter overhead.
+Uses Flash Attention 2 for memory-efficient attention computation.
 """
 
 import math
@@ -16,7 +12,7 @@ import torch.nn.functional as F
 
 
 class CausalSelfAttention(nn.Module):
-    """Multi-head causal self-attention with fused QKV projection."""
+    """Multi-head causal self-attention with Flash Attention 2."""
 
     def __init__(self, config):
         """
@@ -32,29 +28,19 @@ class CausalSelfAttention(nn.Module):
         self.d_model = config.d_model
         self.head_dim = config.d_model // config.n_heads
         
-        # Fused QKV projection: one linear layer for all three
-        # More efficient than separate q,k,v projections
+        # Fused QKV projection
         self.qkv_proj = nn.Linear(config.d_model, 3 * config.d_model, bias=config.bias)
         
-        # Output projection back to d_model
+        # Output projection
         self.out_proj = nn.Linear(config.d_model, config.d_model, bias=config.bias)
         
-        # Dropout for attention weights (regularization)
-        self.attn_dropout = nn.Dropout(config.dropout)
+        # Dropout
+        self.attn_dropout = config.dropout
         self.resid_dropout = nn.Dropout(config.dropout)
-        
-        # Causal mask: lower triangular matrix
-        # registered as buffer so it moves with model to device
-        self.register_buffer(
-            "causal_mask",
-            torch.tril(torch.ones(config.context_length, config.context_length)).view(
-                1, 1, config.context_length, config.context_length
-            ),
-        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass of causal self-attention.
+        Forward pass using Flash Attention 2.
         
         Args:
             x: Input tensor of shape (batch, seq_len, d_model)
@@ -62,39 +48,29 @@ class CausalSelfAttention(nn.Module):
         Returns:
             Output tensor of shape (batch, seq_len, d_model)
         """
-        B, T, C = x.size()  # batch, sequence length, embedding dimension
+        B, T, C = x.size()
         
-        # Fused QKV projection: (B, T, 3*C)
+        # Fused QKV projection
         qkv = self.qkv_proj(x)
         
-        # Split into Q, K, V and reshape for multi-head attention
-        # (B, T, 3*C) -> (B, T, 3, n_heads, head_dim) -> (3, B, n_heads, T, head_dim)
-        qkv = qkv.view(B, T, 3, self.n_heads, self.head_dim).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]
+        # Split into Q, K, V: (B, T, 3*C) -> (B, T, 3, n_heads, head_dim)
+        qkv = qkv.view(B, T, 3, self.n_heads, self.head_dim)
+        q, k, v = qkv[:, :, 0], qkv[:, :, 1], qkv[:, :, 2]
         
-        # Scaled dot-product attention
-        # attn = Q @ K^T / sqrt(d_k)
-        # Shape: (B, n_heads, T, T)
-        scale = 1.0 / math.sqrt(self.head_dim)
-        attn = (q @ k.transpose(-2, -1)) * scale
+        # Flash Attention 2 (memory efficient, no materialized attention matrix)
+        out = F.scaled_dot_product_attention(
+            q.transpose(1, 2),  # (B, n_heads, T, head_dim)
+            k.transpose(1, 2),
+            v.transpose(1, 2),
+            attn_mask=None,
+            dropout_p=self.attn_dropout if self.training else 0.0,
+            is_causal=True,
+        )
         
-        # Apply causal mask: set future positions to -inf
-        # The mask is broadcast to match (B, n_heads, T, T)
-        attn = attn.masked_fill(self.causal_mask[:, :, :T, :T] == 0, float("-inf"))
-        
-        # Softmax over last dimension (keys)
-        attn = F.softmax(attn, dim=-1)
-        
-        # Apply dropout to attention weights
-        attn = self.attn_dropout(attn)
-        
-        # Weighted sum of values: (B, n_heads, T, head_dim)
-        out = attn @ v
-        
-        # Reshape back: (B, n_heads, T, head_dim) -> (B, T, C)
+        # Reshape: (B, n_heads, T, head_dim) -> (B, T, C)
         out = out.transpose(1, 2).contiguous().view(B, T, C)
         
-        # Output projection with residual dropout
+        # Output projection
         out = self.resid_dropout(self.out_proj(out))
         
         return out
